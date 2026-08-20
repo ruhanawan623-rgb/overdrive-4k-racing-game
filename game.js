@@ -1,26 +1,30 @@
 /**
- * OVERDRIVE 4K - Bridge Highway Edition
- * Inspired by classic Highway Traffic Racers
- * Features: 4-Lane Scenic Bridge over Water, Rocky Cliffs, Box Trucks, SUVs, Sports Cars,
- * Dynamic Shadows, Realistic Traffic AI, and Web Audio Engine.
+ * OVERDRIVE 4K - Two-Way Highway Traffic Edition
+ * Modeled directly after the iconic moody highway racer:
+ * - 90s Black Street Tuner with dual chrome exhausts & amber/red taillights
+ * - Two-way traffic: Oncoming cars (yellow hatchback, headlights) on left, forward traffic on right
+ * - Glowing misty taillight halos & atmospheric red bloom in the distance
+ * - Roadside telephone poles with crossbars, stormy overcast weather & rain/snow particles
  */
 
 // ==========================================
 // 1. CONFIGURATION & STATE
 // ==========================================
 const CONFIG = {
-  // 4 lanes: -5.4, -1.8 (Left Side), +1.8, +5.4 (Right Side)
+  // 4 Lanes:
+  // Lane 0 (-5.4), Lane 1 (-1.8): ONCOMING TRAFFIC (driving towards player)
+  // Lane 2 (+1.8), Lane 3 (+5.4): FORWARD TRAFFIC (same direction)
   LANES: [-5.4, -1.8, 1.8, 5.4],
   ROAD_WIDTH: 15,
   SEGMENT_LENGTH: 80,
   NUM_SEGMENTS: 14,
   MAX_SPEED: 180, // MPH
-  ACCELERATION: 40,
-  BRAKING: 65,
+  ACCELERATION: 42,
+  BRAKING: 70,
   FRICTION: 10,
-  NITRO_ACCEL: 75,
-  NITRO_MAX_SPEED: 225,
-  STEER_SPEED: 12,
+  NITRO_ACCEL: 80,
+  NITRO_MAX_SPEED: 220,
+  STEER_SPEED: 13,
   MAX_STEER_ANGLE: 0.28,
 };
 
@@ -43,10 +47,10 @@ const STATE = {
   isNitro: false,
   isDrifting: false,
   
-  carColor: 0xba1826, // Classic Sports Red (like screenshot)
-  envMode: 'daylight', // daylight, sunset, night, storm
-  cameraMode: 0, // 0: Elevated Bridge Cam (Screenshot Angle), 1: Close Chase, 2: Cockpit, 3: Bumper
-  twoWayTraffic: false // Can toggle two-way traffic
+  carColor: 0x18191d, // Matte Black 90s Tuner (Exact screenshot match)
+  envMode: 'overcast', // overcast/stormy (default), sunset, daylight, night
+  cameraMode: 0, // 0: Tight Rear Chase (Screenshot angle), 1: Elevated, 2: Cockpit, 3: Bumper
+  twoWayTraffic: true
 };
 
 const KEYS = {
@@ -84,7 +88,6 @@ class SoundEngine {
       this.masterGain.gain.setValueAtTime(0.35, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
 
-      // Engine Polyphonic Synth
       this.engineGain = this.ctx.createGain();
       this.engineGain.gain.setValueAtTime(0.12, this.ctx.currentTime);
 
@@ -94,11 +97,11 @@ class SoundEngine {
 
       this.osc1 = this.ctx.createOscillator();
       this.osc1.type = 'sawtooth';
-      this.osc1.frequency.setValueAtTime(50, this.ctx.currentTime);
+      this.osc1.frequency.setValueAtTime(45, this.ctx.currentTime);
 
       this.osc2 = this.ctx.createOscillator();
       this.osc2.type = 'triangle';
-      this.osc2.frequency.setValueAtTime(100, this.ctx.currentTime);
+      this.osc2.frequency.setValueAtTime(90, this.ctx.currentTime);
 
       this.osc1.connect(this.filter);
       this.osc2.connect(this.filter);
@@ -108,7 +111,6 @@ class SoundEngine {
       this.osc1.start();
       this.osc2.start();
 
-      // Noise generator for tire skids & wind
       const bufferSize = this.ctx.sampleRate * 2;
       const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
@@ -122,7 +124,7 @@ class SoundEngine {
 
       const skidFilter = this.ctx.createBiquadFilter();
       skidFilter.type = 'bandpass';
-      skidFilter.frequency.setValueAtTime(1400, this.ctx.currentTime);
+      skidFilter.frequency.setValueAtTime(1300, this.ctx.currentTime);
       skidFilter.Q.setValueAtTime(3, this.ctx.currentTime);
 
       this.skidGain = this.ctx.createGain();
@@ -133,7 +135,6 @@ class SoundEngine {
       this.skidGain.connect(this.masterGain);
       noiseSource.start();
 
-      // Nitro Synth
       const nitroNoise = this.ctx.createBufferSource();
       nitroNoise.buffer = noiseBuffer;
       nitroNoise.loop = true;
@@ -157,7 +158,7 @@ class SoundEngine {
   update(speed, rpm, isDrifting, isNitro) {
     if (!this.initialized || this.muted) return;
     const t = this.ctx.currentTime;
-    const baseFreq = 40 + (rpm / 8000) * 150;
+    const baseFreq = 38 + (rpm / 8000) * 155;
     this.osc1.frequency.setTargetAtTime(baseFreq, t, 0.05);
     this.osc2.frequency.setTargetAtTime(baseFreq * 1.5, t, 0.05);
     this.filter.frequency.setTargetAtTime(350 + (rpm / 8000) * 1500, t, 0.05);
@@ -174,8 +175,8 @@ class SoundEngine {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(550, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1100, this.ctx.currentTime + 0.15);
+    osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.15);
     gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.22);
     osc.connect(gain);
@@ -210,60 +211,58 @@ class SoundEngine {
 const Audio = new SoundEngine();
 
 // ==========================================
-// 3. THREE.JS SCENE SETUP & BRIDGE ENVIRONMENT
+// 3. THREE.JS SCENE SETUP & MOODY HIGHWAY
 // ==========================================
 let scene, camera, renderer, container;
 let sunLight, ambientLight, skyMesh;
 let roadSegments = [];
 let trafficCars = [];
-let waterPlanes = [];
+let weatherParticles;
 let playerCarGroup, playerCarBodyMesh;
-let shadowTexture = null;
+let shadowTexture, redGlowTexture, whiteGlowTexture;
+let playerBrakeLights = [];
 
 function init3D() {
   container = document.getElementById('game-container');
   
   scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xa0c4de, 0.0028);
+  // Moody dark mist fog (like screenshot)
+  scene.fog = new THREE.FogExp2(0x283038, 0.0045);
 
-  camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 800);
   
-  // Screenshot Elevated Bridge Perspective (Viewing down highway from behind & above)
-  camera.position.set(0, 11, 14);
-  camera.lookAt(0, 0.8, -35);
+  // Signature low rear-view chase camera matching the screenshot
+  camera.position.set(0, 3.4, 6.8);
+  camera.lookAt(0, 1.1, -30);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Sunlight (Crisp Natural Daytime Lighting like screenshot)
-  ambientLight = new THREE.AmbientLight(0xfff5ea, 0.85);
+  // Moody Overcast Lighting
+  ambientLight = new THREE.AmbientLight(0x708090, 0.8);
   scene.add(ambientLight);
 
-  sunLight = new THREE.DirectionalLight(0xfff8ee, 1.8);
-  sunLight.position.set(35, 70, 30);
+  sunLight = new THREE.DirectionalLight(0xb0c4de, 1.2);
+  sunLight.position.set(20, 60, 20);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 2048;
   sunLight.shadow.mapSize.height = 2048;
-  sunLight.shadow.camera.near = 10;
-  sunLight.shadow.camera.far = 300;
-  sunLight.shadow.camera.left = -40;
-  sunLight.shadow.camera.right = 40;
-  sunLight.shadow.camera.top = 40;
-  sunLight.shadow.camera.bottom = -40;
   scene.add(sunLight);
 
   shadowTexture = createContactShadowTexture();
+  redGlowTexture = createGlowHaloTexture('#ff0022', 128);
+  whiteGlowTexture = createGlowHaloTexture('#ffffff', 128);
 
   createSkyDome();
-  createWaterAndTerrain();
   buildRoadSegments();
   buildPlayerCar();
+  createWeatherParticles();
   setEnvironment(STATE.envMode);
 
   window.addEventListener('resize', onWindowResize);
@@ -274,8 +273,8 @@ function createContactShadowTexture() {
   canvas.width = 128;
   canvas.height = 128;
   const ctx = canvas.getContext('2d');
-  const grad = ctx.createRadialGradient(64, 64, 10, 64, 64, 60);
-  grad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+  const grad = ctx.createRadialGradient(64, 64, 8, 64, 64, 60);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 0.75)');
   grad.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
   grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = grad;
@@ -283,118 +282,101 @@ function createContactShadowTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
+function createGlowHaloTexture(colorStr, size = 128) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const center = size / 2;
+  const grad = ctx.createRadialGradient(center, center, 2, center, center, center);
+  grad.addColorStop(0, colorStr);
+  grad.addColorStop(0.3, colorStr);
+  grad.addColorStop(0.7, 'rgba(255, 30, 0, 0.2)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
+
 function createSkyDome() {
-  const skyGeo = new THREE.SphereGeometry(700, 32, 24);
+  const skyGeo = new THREE.SphereGeometry(600, 32, 24);
   const skyMat = new THREE.MeshBasicMaterial({
-    color: 0x93b7d8,
+    color: 0x222a32,
     side: THREE.BackSide
   });
   skyMesh = new THREE.Mesh(skyGeo, skyMat);
   scene.add(skyMesh);
 }
 
-// 4-Lane Bridge Over Water & Rocky Cliffs
-function createWaterAndTerrain() {
-  // 1. Water Surface (Shimmering Blue Water below bridge)
-  const waterGeo = new THREE.PlaneGeometry(350, 800, 32, 32);
-  const waterMat = new THREE.MeshStandardMaterial({
-    color: 0x1b7294, // Beautiful tropical/river blue
-    roughness: 0.15,
-    metalness: 0.65,
-  });
+// Weather Particle Snow / Rain Streaks
+function createWeatherParticles() {
+  const count = 1500;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
 
-  const water = new THREE.Mesh(waterGeo, waterMat);
-  water.rotation.x = -Math.PI / 2;
-  water.position.set(0, -6.5, -200);
-  scene.add(water);
-  waterPlanes.push(water);
-
-  // 2. Grassy Terrain / Banks in the Distance
-  const terrainGeo = new THREE.PlaneGeometry(600, 800);
-  const terrainMat = new THREE.MeshStandardMaterial({
-    color: 0xa1a55f, // Grassy hillside like screenshot
-    roughness: 0.9,
-    metalness: 0.1
-  });
-
-  const leftBank = new THREE.Mesh(terrainGeo, terrainMat);
-  leftBank.rotation.x = -Math.PI / 2;
-  leftBank.position.set(-180, -2, -200);
-  scene.add(leftBank);
-
-  const rightBank = new THREE.Mesh(terrainGeo, terrainMat);
-  rightBank.rotation.x = -Math.PI / 2;
-  rightBank.position.set(180, -2, -200);
-  scene.add(rightBank);
-
-  // 3. Rocky Cliffs flanking the bridge
-  const rockGeo = new THREE.DodecahedronGeometry(8, 1);
-  const rockMat = new THREE.MeshStandardMaterial({
-    color: 0x48423a,
-    roughness: 0.95,
-    metalness: 0.05,
-    flatShading: true
-  });
-
-  for (let i = 0; i < 24; i++) {
-    const rock = new THREE.Mesh(rockGeo, rockMat);
-    const side = i % 2 === 0 ? -1 : 1;
-    rock.position.set(
-      side * (CONFIG.ROAD_WIDTH / 2 + 7 + Math.random() * 6),
-      -2 + Math.random() * 2,
-      -i * 35 + 50
-    );
-    rock.scale.set(1.5 + Math.random() * 0.8, 1.2 + Math.random() * 0.6, 1.8 + Math.random() * 1.2);
-    rock.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
-    scene.add(rock);
+  for (let i = 0; i < count * 3; i += 3) {
+    pos[i] = (Math.random() - 0.5) * 50;
+    pos[i + 1] = Math.random() * 25;
+    pos[i + 2] = (Math.random() - 0.5) * 100;
   }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xccddee,
+    size: 0.2,
+    transparent: true,
+    opacity: 0.6
+  });
+
+  weatherParticles = new THREE.Points(geo, mat);
+  scene.add(weatherParticles);
 }
 
 // ==========================================
-// 4. 4-LANE BRIDGE HIGHWAY TEXTURE & SEGMENTS
+// 4. ROADWAY & TELEPHONE UTILITY POLES
 // ==========================================
-function createBridgeRoadTexture() {
+function createHighwayTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 1024;
   const ctx = canvas.getContext('2d');
 
-  // Concrete / Asphalt Bridge Base (Grey textured road like screenshot)
-  ctx.fillStyle = '#6b7278';
+  // Dark wet asphalt base
+  ctx.fillStyle = '#2b3036';
   ctx.fillRect(0, 0, 1024, 1024);
 
-  // Realistic asphalt noise & weathering
-  for (let i = 0; i < 12000; i++) {
+  // Noise & asphalt roughness
+  for (let i = 0; i < 15000; i++) {
     const x = Math.random() * 1024;
     const y = Math.random() * 1024;
-    const v = Math.floor(Math.random() * 26) - 13;
-    ctx.fillStyle = `rgb(${107 + v}, ${114 + v}, ${120 + v})`;
+    const v = Math.floor(Math.random() * 24) - 12;
+    ctx.fillStyle = `rgb(${43 + v}, ${48 + v}, ${54 + v})`;
     ctx.fillRect(x, y, 2, 2);
   }
 
-  // Tire skid marks & wear
-  ctx.fillStyle = 'rgba(40, 45, 50, 0.08)';
-  const tireTracks = [130, 230, 380, 480, 640, 740, 890, 990];
+  // Heavy tire tracks
+  ctx.fillStyle = 'rgba(20, 24, 28, 0.2)';
+  const tireTracks = [120, 220, 360, 460, 620, 720, 860, 960];
   tireTracks.forEach(tx => {
-    ctx.fillRect(tx - 18, 0, 36, 1024);
+    ctx.fillRect(tx - 20, 0, 40, 1024);
   });
 
-  // Solid Center Divider (Prominent Solid White Line dividing the 2 halves)
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(507, 0, 10, 1024);
+  // Solid Center Divider Line
+  ctx.fillStyle = '#dce1e6';
+  ctx.fillRect(508, 0, 8, 1024);
 
-  // Dashed Lane Lines (White Dashes between Lane 1 & 2, and Lane 3 & 4)
+  // Dashed White Lane Lines
   const dashedLanes = [256, 768];
   dashedLanes.forEach(lx => {
     for (let y = 0; y < 1024; y += 128) {
-      ctx.fillRect(lx - 4, y + 20, 8, 75);
+      ctx.fillRect(lx - 4, y + 20, 8, 70);
     }
   });
 
-  // Solid Outer Edge Lines
-  ctx.fillStyle = '#e5e7eb';
-  ctx.fillRect(20, 0, 8, 1024);
-  ctx.fillRect(996, 0, 8, 1024);
+  // Solid Edge Lines
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(24, 0, 6, 1024);
+  ctx.fillRect(994, 0, 6, 1024);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
@@ -404,76 +386,83 @@ function createBridgeRoadTexture() {
 }
 
 function buildRoadSegments() {
-  const roadTex = createBridgeRoadTexture();
+  const roadTex = createHighwayTexture();
   const roadMat = new THREE.MeshStandardMaterial({
     map: roadTex,
-    roughness: 0.6,
-    metalness: 0.15
+    roughness: 0.45,
+    metalness: 0.25
   });
 
   const barrierMat = new THREE.MeshStandardMaterial({
-    color: 0xb5bec6, // Metal guard rail
-    metalness: 0.8,
-    roughness: 0.3
+    color: 0x5a636c,
+    metalness: 0.7,
+    roughness: 0.4
   });
 
-  const postMat = new THREE.MeshStandardMaterial({
-    color: 0x475569,
-    metalness: 0.9,
-    roughness: 0.2
-  });
-
-  const bridgeConcreteMat = new THREE.MeshStandardMaterial({
-    color: 0x4a4f54,
-    roughness: 0.9
-  });
+  // Wooden / Concrete Utility Pole Materials
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x4a3b32, roughness: 0.9 });
+  const metalBracketMat = new THREE.MeshStandardMaterial({ color: 0x22252a, metalness: 0.8 });
 
   for (let i = 0; i < CONFIG.NUM_SEGMENTS; i++) {
     const segGroup = new THREE.Group();
 
-    // 1. Asphalt Deck
-    const deckGeo = new THREE.PlaneGeometry(CONFIG.ROAD_WIDTH, CONFIG.SEGMENT_LENGTH);
-    const deck = new THREE.Mesh(deckGeo, roadMat);
+    // 1. Asphalt Highway Surface
+    const deck = new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.ROAD_WIDTH, CONFIG.SEGMENT_LENGTH), roadMat);
     deck.rotation.x = -Math.PI / 2;
     deck.receiveShadow = true;
     segGroup.add(deck);
 
-    // 2. Concrete Bridge Retaining Edge & Wall
-    const ledgeGeo = new THREE.BoxGeometry(0.8, 1.2, CONFIG.SEGMENT_LENGTH);
-    const leftLedge = new THREE.Mesh(ledgeGeo, bridgeConcreteMat);
-    leftLedge.position.set(-CONFIG.ROAD_WIDTH / 2 - 0.4, -0.4, 0);
-    const rightLedge = new THREE.Mesh(ledgeGeo, bridgeConcreteMat);
-    rightLedge.position.set(CONFIG.ROAD_WIDTH / 2 + 0.4, -0.4, 0);
-    segGroup.add(leftLedge, rightLedge);
-
-    // 3. Steel W-Beam Guardrails (Left & Right)
+    // 2. Continuous Steel Guardrails (Left & Right)
     const railGeo = new THREE.BoxGeometry(0.2, 0.45, CONFIG.SEGMENT_LENGTH);
     const leftRail = new THREE.Mesh(railGeo, barrierMat);
-    leftRail.position.set(-CONFIG.ROAD_WIDTH / 2 - 0.2, 0.5, 0);
+    leftRail.position.set(-CONFIG.ROAD_WIDTH / 2 - 0.2, 0.45, 0);
     leftRail.castShadow = true;
 
     const rightRail = new THREE.Mesh(railGeo, barrierMat);
-    rightRail.position.set(CONFIG.ROAD_WIDTH / 2 + 0.2, 0.5, 0);
+    rightRail.position.set(CONFIG.ROAD_WIDTH / 2 + 0.2, 0.45, 0);
     rightRail.castShadow = true;
     segGroup.add(leftRail, rightRail);
 
-    // Guardrail Support Posts every 8m
+    // Guardrail Support Posts
     const postGeo = new THREE.BoxGeometry(0.15, 0.8, 0.15);
     for (let z = -CONFIG.SEGMENT_LENGTH / 2; z <= CONFIG.SEGMENT_LENGTH / 2; z += 8) {
-      const pL = new THREE.Mesh(postGeo, postMat);
-      pL.position.set(-CONFIG.ROAD_WIDTH / 2 - 0.2, 0.35, z);
-      const pR = new THREE.Mesh(postGeo, postMat);
-      pR.position.set(CONFIG.ROAD_WIDTH / 2 + 0.2, 0.35, z);
+      const pL = new THREE.Mesh(postGeo, barrierMat);
+      pL.position.set(-CONFIG.ROAD_WIDTH / 2 - 0.2, 0.3, z);
+      const pR = new THREE.Mesh(postGeo, barrierMat);
+      pR.position.set(CONFIG.ROAD_WIDTH / 2 + 0.2, 0.3, z);
       segGroup.add(pL, pR);
     }
 
-    // 4. Bridge Concrete Pier Pillars underneath
-    const pierGeo = new THREE.CylinderGeometry(1.2, 1.4, 8, 12);
-    const pierL = new THREE.Mesh(pierGeo, bridgeConcreteMat);
-    pierL.position.set(-CONFIG.ROAD_WIDTH / 2 + 2, -4, 0);
-    const pierR = new THREE.Mesh(pierGeo, bridgeConcreteMat);
-    pierR.position.set(CONFIG.ROAD_WIDTH / 2 - 2, -4, 0);
-    segGroup.add(pierL, pierR);
+    // 3. Wooden Telephone / Utility Poles with Crossarms (Matches screenshot!)
+    for (let z = -CONFIG.SEGMENT_LENGTH / 2 + 20; z <= CONFIG.SEGMENT_LENGTH / 2; z += 40) {
+      [-1, 1].forEach(side => {
+        const poleGroup = new THREE.Group();
+        const mainPole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 8.5, 8), poleMat);
+        mainPole.position.y = 4.25;
+
+        // Crossarms with electrical insulators
+        const crossarm = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.18, 0.18), poleMat);
+        crossarm.position.set(0, 7.6, 0);
+
+        const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), metalBracketMat);
+        bracket.position.set(0, 7.3, 0);
+
+        poleGroup.add(mainPole, crossarm, bracket);
+        poleGroup.position.set(side * (CONFIG.ROAD_WIDTH / 2 + 2.5), 0, z);
+        segGroup.add(poleGroup);
+      });
+    }
+
+    // Roadside Terrain / Grass Shoulder
+    const shoulderMat = new THREE.MeshStandardMaterial({ color: 0x2e3830, roughness: 0.95 });
+    const leftShoulder = new THREE.Mesh(new THREE.PlaneGeometry(60, CONFIG.SEGMENT_LENGTH), shoulderMat);
+    leftShoulder.rotation.x = -Math.PI / 2;
+    leftShoulder.position.set(-CONFIG.ROAD_WIDTH / 2 - 30, -0.05, 0);
+
+    const rightShoulder = new THREE.Mesh(new THREE.PlaneGeometry(60, CONFIG.SEGMENT_LENGTH), shoulderMat);
+    rightShoulder.rotation.x = -Math.PI / 2;
+    rightShoulder.position.set(CONFIG.ROAD_WIDTH / 2 + 30, -0.05, 0);
+    segGroup.add(leftShoulder, rightShoulder);
 
     segGroup.position.z = -i * CONFIG.SEGMENT_LENGTH;
     scene.add(segGroup);
@@ -482,327 +471,260 @@ function buildRoadSegments() {
 }
 
 // ==========================================
-// 5. CAR BUILDERS (SPORTS COUPE, BOX TRUCK, SUV)
+// 5. VEHICLE MESH BUILDERS (EXACT MATCH)
 // ==========================================
-
-// Helper: Soft contact shadow plane beneath any vehicle
 function addContactShadow(parentGroup, width = 2.4, length = 4.8) {
   const shadowGeo = new THREE.PlaneGeometry(width, length);
   const shadowMat = new THREE.MeshBasicMaterial({
     map: shadowTexture,
     transparent: true,
-    opacity: 0.7,
+    opacity: 0.75,
     depthWrite: false
   });
   const shadowPlane = new THREE.Mesh(shadowGeo, shadowMat);
   shadowPlane.rotation.x = -Math.PI / 2;
-  shadowPlane.position.set(0.4, 0.02, 0.2); // Offset slightly with sunlight angle
+  shadowPlane.position.set(0, 0.02, 0);
   parentGroup.add(shadowPlane);
 }
 
-// 1. Player Sports Coupe / Convertible (Red Car in Screenshot)
+// 1. Player 90s Black Street Tuner (Exact match with screenshot rear-view)
 function buildPlayerCar() {
   playerCarGroup = new THREE.Group();
 
-  const paintMat = new THREE.MeshStandardMaterial({
-    color: STATE.carColor,
-    metalness: 0.8,
-    roughness: 0.25
-  });
-
-  const blackRoofMat = new THREE.MeshStandardMaterial({
-    color: 0x16171b,
+  const blackBodyMat = new THREE.MeshStandardMaterial({
+    color: STATE.carColor, // Matte Black / Dark Charcoal
     metalness: 0.6,
-    roughness: 0.3
+    roughness: 0.4
   });
 
   const glassMat = new THREE.MeshStandardMaterial({
-    color: 0x0a1018,
-    metalness: 0.95,
+    color: 0x182028,
+    metalness: 0.9,
     roughness: 0.1,
     transparent: true,
-    opacity: 0.85
+    opacity: 0.88
   });
 
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x111113, roughness: 0.5 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x0d0e11, roughness: 0.8 });
 
-  // Chassis Lower Body
-  const bodyGeo = new THREE.BoxGeometry(2.1, 0.5, 4.3);
-  const body = new THREE.Mesh(bodyGeo, paintMat);
+  // Main Boxy Lower Body
+  const bodyGeo = new THREE.BoxGeometry(2.05, 0.52, 4.3);
+  const body = new THREE.Mesh(bodyGeo, blackBodyMat);
   body.position.y = 0.45;
   body.castShadow = true;
   playerCarGroup.add(body);
   playerCarBodyMesh = body;
 
-  // Front Hood & Rear Deck Slope
-  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.35, 1.4), paintMat);
-  hood.position.set(0, 0.5, -1.2);
-  playerCarGroup.add(hood);
+  // Rear Black Bumper with Horizontal Accent Strip
+  const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(2.08, 0.28, 0.2), trimMat);
+  rearBumper.position.set(0, 0.32, 2.18);
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.04, 0.02), new THREE.MeshBasicMaterial({ color: 0x555560 }));
+  strip.position.set(0, 0.36, 2.29);
+  playerCarGroup.add(rearBumper, strip);
 
-  // Black Convertible Top / Cabin
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.42, 2.0), blackRoofMat);
-  roof.position.set(0, 0.82, 0.1);
-  roof.castShadow = true;
-  playerCarGroup.add(roof);
+  // Boxy Cabin with Wide Rear Window
+  const cabinGeo = new THREE.BoxGeometry(1.7, 0.46, 2.3);
+  const cabin = new THREE.Mesh(cabinGeo, blackBodyMat);
+  cabin.position.set(0, 0.84, -0.1);
+  cabin.castShadow = true;
+  playerCarGroup.add(cabin);
 
-  // Rear Tinted Glass (Curved look)
-  const rearGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.55), glassMat);
-  rearGlass.position.set(0, 0.8, 1.0);
-  rearGlass.rotation.x = -Math.PI / 4;
-  playerCarGroup.add(rearGlass);
+  // Wide Sloped Rear Window
+  const rearWin = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.65), glassMat);
+  rearWin.position.set(0, 0.84, 1.1);
+  rearWin.rotation.x = -Math.PI / 3.8;
+  playerCarGroup.add(rearWin);
 
   // Front Windshield
-  const frontGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.55), glassMat);
-  frontGlass.position.set(0, 0.8, -0.85);
-  frontGlass.rotation.x = Math.PI / 4;
-  playerCarGroup.add(frontGlass);
+  const frontWin = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.6), glassMat);
+  frontWin.position.set(0, 0.84, -1.25);
+  frontWin.rotation.x = Math.PI / 4;
+  playerCarGroup.add(frontWin);
 
   // Side Mirrors
-  const mirrorGeo = new THREE.BoxGeometry(0.25, 0.15, 0.12);
-  const mirrorL = new THREE.Mesh(mirrorGeo, blackRoofMat);
-  mirrorL.position.set(-1.12, 0.65, -0.6);
-  const mirrorR = new THREE.Mesh(mirrorGeo, blackRoofMat);
-  mirrorR.position.set(1.12, 0.65, -0.6);
+  const mirrorL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.1), trimMat);
+  mirrorL.position.set(-1.08, 0.68, -0.7);
+  const mirrorR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.1), trimMat);
+  mirrorR.position.set(1.08, 0.68, -0.7);
   playerCarGroup.add(mirrorL, mirrorR);
 
-  // Taillights (Glowing Red LEDs)
-  const tailMat = new THREE.MeshBasicMaterial({ color: 0xff0022 });
-  const tailL = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 0.05), tailMat);
-  tailL.position.set(-0.72, 0.55, 2.15);
-  const tailR = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 0.05), tailMat);
-  tailR.position.set(0.72, 0.55, 2.15);
-  playerCarGroup.add(tailL, tailR);
+  // 90s Dual-Section Taillights (Amber Indicator on top, Red Brake on bottom!)
+  const amberMat = new THREE.MeshBasicMaterial({ color: 0xff8c00 });
+  const redBrakeMat = new THREE.MeshBasicMaterial({ color: 0xff0022 });
 
-  // Headlights
-  const headMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const headL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.05), headMat);
-  headL.position.set(-0.72, 0.5, -2.15);
-  const headR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.05), headMat);
-  headR.position.set(0.72, 0.5, -2.15);
-  playerCarGroup.add(headL, headR);
+  // Left Taillight (Amber Top + Red Bottom)
+  const tLAmber = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.05), amberMat);
+  tLAmber.position.set(-0.72, 0.58, 2.16);
+  const tLRed = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.05), redBrakeMat);
+  tLRed.position.set(-0.72, 0.46, 2.16);
 
-  // Wheels (Silver Alloy Rims with high detail)
-  const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 18);
-  wheelGeo.rotateZ(Math.PI / 2);
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x1c1c20, roughness: 0.8 });
-  const rimMat = new THREE.MeshStandardMaterial({ color: 0xe8edf2, metalness: 0.95, roughness: 0.1 });
+  // Right Taillight (Amber Top + Red Bottom)
+  const tRAmber = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.05), amberMat);
+  tRAmber.position.set(0.72, 0.58, 2.16);
+  const tRRed = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.05), redBrakeMat);
+  tRRed.position.set(0.72, 0.46, 2.16);
 
-  playerCarGroup.wheels = [];
-  const wheelPositions = [
-    { x: -1.02, y: 0.38, z: -1.25 },
-    { x: 1.02, y: 0.38, z: -1.25 },
-    { x: -1.02, y: 0.38, z: 1.25 },
-    { x: 1.02, y: 0.38, z: 1.25 },
-  ];
+  playerCarGroup.add(tLAmber, tLRed, tRAmber, tRRed);
+  playerBrakeLights = [tLRed, tRRed];
 
-  wheelPositions.forEach((pos, idx) => {
-    const wheelGroup = new THREE.Group();
-    const tire = new THREE.Mesh(wheelGeo, tireMat);
-    tire.castShadow = true;
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.32, 10), rimMat);
-    rim.rotateZ(Math.PI / 2);
-    wheelGroup.add(tire, rim);
-    wheelGroup.position.set(pos.x, pos.y, pos.z);
-    playerCarGroup.add(wheelGroup);
-    playerCarGroup.wheels.push(wheelGroup);
-  });
+  // Dual Chrome Exhaust Pipes at Lower Right (Exact match with screenshot!)
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.95, roughness: 0.1 });
+  const exhaust1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.35, 12), chromeMat);
+  exhaust1.rotateX(Math.PI / 2);
+  exhaust1.position.set(0.42, 0.18, 2.25);
 
-  // Nitro Exhaust Glow
-  const flameGeo = new THREE.ConeGeometry(0.12, 0.8, 8);
-  flameGeo.rotateX(Math.PI / 2);
-  const nitroMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0 });
-  const flameL = new THREE.Mesh(flameGeo, nitroMat);
-  flameL.position.set(-0.5, 0.35, 2.3);
-  const flameR = new THREE.Mesh(flameGeo, nitroMat);
-  flameR.position.set(0.5, 0.35, 2.3);
-  playerCarGroup.add(flameL, flameR);
-  playerCarGroup.nitroFlames = [flameL, flameR];
+  const exhaust2 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.35, 12), chromeMat);
+  exhaust2.rotateX(Math.PI / 2);
+  exhaust2.position.set(0.58, 0.18, 2.25);
 
-  // Soft Contact Shadow Plane
-  addContactShadow(playerCarGroup, 2.6, 4.8);
-
-  // Default Lane: Lane 1 (Left lane, red car in screenshot)
-  playerCarGroup.position.set(CONFIG.LANES[0], 0, 0);
-  scene.add(playerCarGroup);
-}
-
-// 2. White Box Delivery Semi-Truck (Matches Truck in screenshot)
-function buildBoxTruckMesh() {
-  const truck = new THREE.Group();
-
-  const whiteCargoMat = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, roughness: 0.4 });
-  const blueCabMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, metalness: 0.7, roughness: 0.3 });
-  const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x22252a, metalness: 0.8, roughness: 0.4 });
-
-  // Main White Cargo Box
-  const boxGeo = new THREE.BoxGeometry(2.8, 3.2, 6.2);
-  const box = new THREE.Mesh(boxGeo, whiteCargoMat);
-  box.position.set(0, 2.2, -0.8);
-  box.castShadow = true;
-  truck.add(box);
-
-  // Rear Cargo Doors & Trim Lines
-  const trimGeo = new THREE.BoxGeometry(2.7, 0.05, 0.05);
-  const t1 = new THREE.Mesh(trimGeo, darkMetalMat);
-  t1.position.set(0, 3.6, 2.32);
-  truck.add(t1);
-
-  // Cab Front Cabin
-  const cabGeo = new THREE.BoxGeometry(2.6, 2.4, 2.4);
-  const cab = new THREE.Mesh(cabGeo, blueCabMat);
-  cab.position.set(0, 1.5, -4.5);
-  cab.castShadow = true;
-  truck.add(cab);
-
-  // Cab Windshield
-  const win = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.0, 0.1), new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.1 }));
-  win.position.set(0, 1.8, -5.72);
-  truck.add(win);
-
-  // Rear Mudflaps & Bumper
-  const bumper = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.3, 0.2), darkMetalMat);
-  bumper.position.set(0, 0.5, 2.3);
-  truck.add(bumper);
-
-  // Taillights
-  const tailMat = new THREE.MeshBasicMaterial({ color: 0xff1122 });
-  const tailL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.15, 0.05), tailMat);
-  tailL.position.set(-1.0, 0.6, 2.4);
-  const tailR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.15, 0.05), tailMat);
-  tailR.position.set(1.0, 0.6, 2.4);
-  truck.add(tailL, tailR);
-
-  // Truck Wheels (6 Wheels)
-  const wheelGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.38, 14);
-  wheelGeo.rotateZ(Math.PI / 2);
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 });
-
-  [-4.2, 0.2, 1.4].forEach(z => {
-    [-1.35, 1.35].forEach(x => {
-      const w = new THREE.Mesh(wheelGeo, tireMat);
-      w.position.set(x, 0.48, z);
-      truck.add(w);
-    });
-  });
-
-  addContactShadow(truck, 3.4, 8.5);
-  truck.length = 8.5;
-  return truck;
-}
-
-// 3. Modern Luxury SUV / Crossover (Grey/Silver with Black Glass Roof in screenshot)
-function buildSUVMesh() {
-  const suv = new THREE.Group();
-
-  const silverPaintMat = new THREE.MeshStandardMaterial({
-    color: 0x7c8793, // Sleek modern silver/grey like screenshot
-    metalness: 0.85,
-    roughness: 0.2
-  });
-
-  const blackGlassMat = new THREE.MeshStandardMaterial({
-    color: 0x11161d,
-    metalness: 0.9,
-    roughness: 0.1
-  });
-
-  // Lower Body
-  const bodyGeo = new THREE.BoxGeometry(2.2, 0.65, 4.6);
-  const body = new THREE.Mesh(bodyGeo, silverPaintMat);
-  body.position.y = 0.55;
-  body.castShadow = true;
-  suv.add(body);
-
-  // Upper Cabin with Full Panoramic Black Glass Roof (Matches screenshot)
-  const cabinGeo = new THREE.BoxGeometry(1.85, 0.58, 2.8);
-  const cabin = new THREE.Mesh(cabinGeo, blackGlassMat);
-  cabin.position.set(0, 1.1, 0.1);
-  cabin.castShadow = true;
-  suv.add(cabin);
-
-  // White / Silver A-Pillar accent (Matches SUV in screenshot)
-  const pillarGeo = new THREE.BoxGeometry(0.12, 0.55, 1.2);
-  const pL = new THREE.Mesh(pillarGeo, silverPaintMat);
-  pL.position.set(-0.94, 1.1, -0.6);
-  pL.rotation.x = Math.PI / 6;
-  const pR = new THREE.Mesh(pillarGeo, silverPaintMat);
-  pR.position.set(0.94, 1.1, -0.6);
-  pR.rotation.x = Math.PI / 6;
-  suv.add(pL, pR);
-
-  // Rear Dual Exhaust & Taillight bar
-  const tailBar = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.1, 0.05), new THREE.MeshBasicMaterial({ color: 0xff1525 }));
-  tailBar.position.set(0, 0.75, 2.32);
-  suv.add(tailBar);
+  playerCarGroup.add(exhaust1, exhaust2);
 
   // Wheels
-  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 16);
+  const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.28, 16);
   wheelGeo.rotateZ(Math.PI / 2);
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.8 });
-  const rimMat = new THREE.MeshStandardMaterial({ color: 0xdde3ea, metalness: 0.9, roughness: 0.15 });
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x161619, roughness: 0.9 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
 
+  playerCarGroup.wheels = [];
   [
-    { x: -1.05, z: -1.35 }, { x: 1.05, z: -1.35 },
-    { x: -1.05, z: 1.35 }, { x: 1.05, z: 1.35 }
+    { x: -1.0, z: -1.2 }, { x: 1.0, z: -1.2 },
+    { x: -1.0, z: 1.2 }, { x: 1.0, z: 1.2 }
   ].forEach(pos => {
     const wGroup = new THREE.Group();
     const tire = new THREE.Mesh(wheelGeo, tireMat);
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.34, 12), rimMat);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.3, 10), rimMat);
     rim.rotateZ(Math.PI / 2);
     wGroup.add(tire, rim);
-    wGroup.position.set(pos.x, 0.42, pos.z);
-    suv.add(wGroup);
+    wGroup.position.set(pos.x, 0.36, pos.z);
+    playerCarGroup.add(wGroup);
+    playerCarGroup.wheels.push(wGroup);
   });
 
-  addContactShadow(suv, 2.7, 5.2);
-  suv.length = 5.0;
-  return suv;
+  // Nitro Flames
+  const nitroMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0 });
+  const flameGeo = new THREE.ConeGeometry(0.1, 0.6, 8);
+  flameGeo.rotateX(Math.PI / 2);
+  const fL = new THREE.Mesh(flameGeo, nitroMat);
+  fL.position.set(0.42, 0.18, 2.5);
+  const fR = new THREE.Mesh(flameGeo, nitroMat);
+  fR.position.set(0.58, 0.18, 2.5);
+  playerCarGroup.add(fL, fR);
+  playerCarGroup.nitroFlames = [fL, fR];
+
+  addContactShadow(playerCarGroup, 2.4, 4.6);
+
+  // Position Player in Lane 2 (Right lane behind yellow car & red traffic)
+  playerCarGroup.position.set(CONFIG.LANES[2], 0, 0);
+  scene.add(playerCarGroup);
 }
 
-// 4. Pickup Truck / Sedan Variety
-function buildSedanMesh(colorHex) {
-  const sedan = new THREE.Group();
-  const paintMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.75, roughness: 0.25 });
-  const glassMat = new THREE.MeshStandardMaterial({ color: 0x151c24, roughness: 0.2 });
+// 2. Yellow Compact Hatchback / Sedan (Matches oncoming yellow car in screenshot!)
+function buildYellowCarMesh() {
+  const car = new THREE.Group();
+  const yellowMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.6, roughness: 0.3 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x182028, roughness: 0.2 });
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.55, 4.4), paintMat);
-  body.position.y = 0.5;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.48, 3.8), yellowMat);
+  body.position.y = 0.44;
   body.castShadow = true;
 
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.48, 2.2), glassMat);
-  cabin.position.set(0, 0.95, -0.1);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.45, 2.0), glassMat);
+  cabin.position.set(0, 0.82, -0.1);
   cabin.castShadow = true;
 
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.05), new THREE.MeshBasicMaterial({ color: 0xff1122 }));
-  tail.position.set(0, 0.55, 2.22);
+  // Oncoming Headlights (Bright White projector beams & lens glow)
+  const headMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const headL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.14, 0.05), headMat);
+  headL.position.set(-0.65, 0.48, 1.91); // Facing towards player when driving oncoming
+  const headR = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.14, 0.05), headMat);
+  headR.position.set(0.65, 0.48, 1.91);
+  car.add(headL, headR);
 
-  sedan.add(body, cabin, tail);
-  addContactShadow(sedan, 2.5, 4.9);
-  sedan.length = 4.5;
-  return sedan;
+  // Headlight Volumetric Sprite Glow
+  const glowSpriteMat = new THREE.SpriteMaterial({ map: whiteGlowTexture, color: 0xffffff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending });
+  const glowL = new THREE.Sprite(glowSpriteMat);
+  glowL.scale.set(3.2, 3.2, 1);
+  glowL.position.set(-0.65, 0.48, 2.1);
+  const glowR = new THREE.Sprite(glowSpriteMat);
+  glowR.scale.set(3.2, 3.2, 1);
+  glowR.position.set(0.65, 0.48, 2.1);
+  car.add(glowL, glowR);
+
+  addContactShadow(car, 2.3, 4.2);
+  car.add(body, cabin);
+  car.length = 4.0;
+  return car;
+}
+
+// 3. Red Forward Traffic / Semi-Trucks with Glowing Red Fog Halos (Matches distant red lights!)
+function buildRedTrafficVehicle(isTruck = false) {
+  const car = new THREE.Group();
+  const redMat = new THREE.MeshStandardMaterial({ color: isTruck ? 0xb91c1c : 0xdc2626, metalness: 0.7, roughness: 0.3 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.6 });
+
+  if (isTruck) {
+    // Red / White Box Truck
+    const box = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.8, 5.8), redMat);
+    box.position.set(0, 1.8, -0.5);
+    box.castShadow = true;
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.0, 2.2), darkMat);
+    cab.position.set(0, 1.3, -4.2);
+    car.add(box, cab);
+    car.length = 7.5;
+  } else {
+    // Red Sedan / Hatchback
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.5, 4.1), redMat);
+    body.position.y = 0.45;
+    body.castShadow = true;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.46, 2.2), darkMat);
+    cabin.position.set(0, 0.85, -0.1);
+    car.add(body, cabin);
+    car.length = 4.3;
+  }
+
+  // Brilliant Glowing Red Taillights with Fog Halo (Matches the red glow in screenshot!)
+  const tailGlowMat = new THREE.SpriteMaterial({
+    map: redGlowTexture,
+    color: 0xff0022,
+    transparent: true,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending
+  });
+
+  const glowL = new THREE.Sprite(tailGlowMat);
+  glowL.scale.set(4.5, 4.5, 1);
+  glowL.position.set(-0.7, 0.6, 2.3);
+
+  const glowR = new THREE.Sprite(tailGlowMat);
+  glowR.scale.set(4.5, 4.5, 1);
+  glowR.position.set(0.7, 0.6, 2.3);
+
+  car.add(glowL, glowR);
+  addContactShadow(car, 2.5, car.length);
+  return car;
 }
 
 // ==========================================
-// 6. TRAFFIC FLEET GENERATOR & AI LOGIC
+// 6. TWO-WAY TRAFFIC FLEET CONTROLLER
 // ==========================================
 function createAITrafficCar(zPos, forcedType = null, forcedLane = null) {
-  let carGroup;
-  const type = forcedType !== null ? forcedType : Math.floor(Math.random() * 3);
+  const laneIndex = forcedLane !== null ? forcedLane : Math.floor(Math.random() * CONFIG.LANES.length);
+  const isOncoming = laneIndex < 2; // Lanes 0 & 1 are oncoming traffic!
 
-  if (type === 0) {
-    carGroup = buildBoxTruckMesh(); // Box Truck (Left Lane in screenshot)
-  } else if (type === 1) {
-    carGroup = buildSUVMesh(); // SUV (Right Lane in screenshot)
+  let carGroup;
+  if (isOncoming) {
+    carGroup = buildYellowCarMesh();
+    carGroup.isOncoming = true;
+    carGroup.speed = 55 + Math.random() * 25; // Driving towards player
   } else {
-    const colors = [0x991b1b, 0x1e3a8a, 0x374151, 0x065f46, 0x854d0e];
-    const c = colors[Math.floor(Math.random() * colors.length)];
-    carGroup = buildSedanMesh(c);
+    const isTruck = forcedType === 'truck' || (forcedType === null && Math.random() > 0.65);
+    carGroup = buildRedTrafficVehicle(isTruck);
+    carGroup.isOncoming = false;
+    carGroup.speed = 45 + Math.random() * 35; // Cruising forward
   }
 
-  const laneIndex = forcedLane !== null ? forcedLane : Math.floor(Math.random() * CONFIG.LANES.length);
   carGroup.position.set(CONFIG.LANES[laneIndex], 0, zPos);
   carGroup.lane = laneIndex;
-  carGroup.speed = 45 + Math.random() * 40; // Cruising speed 45 - 85 MPH
   carGroup.scoredNearMiss = false;
 
   scene.add(carGroup);
@@ -813,70 +735,71 @@ function spawnTrafficFleet() {
   trafficCars.forEach(c => scene.remove(c));
   trafficCars = [];
 
-  // Match the screenshot layout initially:
-  // 1. White Box Truck in Lane 1 ahead (-35)
-  createAITrafficCar(-35, 0, 0);
+  // Match the screenshot exact composition:
+  // 1. Oncoming Yellow Car in Lane 1 (ahead at z = -32)
+  createAITrafficCar(-32, null, 1);
 
-  // 2. Grey SUV in Lane 3 ahead (-45)
-  createAITrafficCar(-48, 1, 2);
+  // 2. Glowing Red Truck / Car in Lane 2 ahead at z = -58 (produces the glowing red halo!)
+  createAITrafficCar(-58, 'truck', 2);
 
-  // 3. Red Truck / Car far in distance Lane 3 (-90)
-  createAITrafficCar(-90, 2, 2);
+  // 3. Red Car in Lane 3 ahead at z = -72
+  createAITrafficCar(-72, 'sedan', 3);
 
-  // 4. Sedan in Lane 4 far (-125)
-  createAITrafficCar(-125, 2, 3);
+  // 4. Oncoming car in Lane 0 far at z = -95
+  createAITrafficCar(-95, null, 0);
 
-  // Remaining traffic cars spaced out
-  for (let i = 4; i < 9; i++) {
-    createAITrafficCar(-i * 40 - 20);
-  }
+  // 5. Far Red traffic cluster
+  createAITrafficCar(-120, 'truck', 2);
+  createAITrafficCar(-145, 'sedan', 3);
+  createAITrafficCar(-170, null, 1);
 }
 
 // ==========================================
-// 7. ENVIRONMENT & TIME PRESETS
+// 7. ENVIRONMENT PRESETS
 // ==========================================
 function setEnvironment(env) {
   STATE.envMode = env;
 
-  if (env === 'daylight') {
-    // Natural Sunlight Bridge (Exact match with screenshot)
-    scene.fog.color.setHex(0xa0c4de);
-    renderer.setClearColor(0xa0c4de);
-    if (skyMesh) skyMesh.material.color.setHex(0x93b7d8);
-    ambientLight.color.setHex(0xfff5ea);
-    ambientLight.intensity = 0.9;
-    sunLight.color.setHex(0xfff8ee);
-    sunLight.intensity = 1.9;
-    sunLight.position.set(35, 70, 30);
+  if (env === 'overcast') {
+    // Moody stormy overcast (Exact screenshot match!)
+    scene.fog.color.setHex(0x283038);
+    renderer.setClearColor(0x283038);
+    if (skyMesh) skyMesh.material.color.setHex(0x20262d);
+    ambientLight.color.setHex(0x708090);
+    ambientLight.intensity = 0.8;
+    sunLight.color.setHex(0xb0c4de);
+    sunLight.intensity = 1.2;
+    if (weatherParticles) weatherParticles.material.opacity = 0.7;
   } else if (env === 'sunset') {
-    scene.fog.color.setHex(0xdd7744);
-    renderer.setClearColor(0xdd7744);
-    if (skyMesh) skyMesh.material.color.setHex(0xdd6633);
-    ambientLight.color.setHex(0xffeedd);
+    scene.fog.color.setHex(0x883322);
+    renderer.setClearColor(0x883322);
+    if (skyMesh) skyMesh.material.color.setHex(0x662211);
+    ambientLight.color.setHex(0xffaa77);
     ambientLight.intensity = 0.7;
-    sunLight.color.setHex(0xff8833);
-    sunLight.intensity = 2.2;
-    sunLight.position.set(40, 50, -120);
+    sunLight.color.setHex(0xff7733);
+    sunLight.intensity = 2.0;
   } else if (env === 'midnight') {
-    scene.fog.color.setHex(0x050b18);
-    renderer.setClearColor(0x050b18);
-    if (skyMesh) skyMesh.material.color.setHex(0x040812);
-    ambientLight.color.setHex(0x224466);
-    ambientLight.intensity = 0.3;
-    sunLight.color.setHex(0x3366cc);
+    scene.fog.color.setHex(0x050810);
+    renderer.setClearColor(0x050810);
+    if (skyMesh) skyMesh.material.color.setHex(0x030508);
+    ambientLight.color.setHex(0x223344);
+    ambientLight.intensity = 0.4;
+    sunLight.color.setHex(0x224488);
     sunLight.intensity = 0.5;
   } else {
-    // Wet Storm
-    scene.fog.color.setHex(0x334455);
-    renderer.setClearColor(0x334455);
-    if (skyMesh) skyMesh.material.color.setHex(0x263340);
-    ambientLight.intensity = 0.6;
-    sunLight.intensity = 0.8;
+    // Daylight
+    scene.fog.color.setHex(0x8da4b8);
+    renderer.setClearColor(0x8da4b8);
+    if (skyMesh) skyMesh.material.color.setHex(0x7c94a8);
+    ambientLight.color.setHex(0xfff5ea);
+    ambientLight.intensity = 0.9;
+    sunLight.color.setHex(0xffffff);
+    sunLight.intensity = 1.8;
   }
 }
 
 // ==========================================
-// 8. RADAR SCANNER (Canvas 2D)
+// 8. RADAR MINIMAP
 // ==========================================
 const minimapCanvas = document.getElementById('minimap-canvas');
 const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
@@ -890,7 +813,7 @@ function renderRadar() {
 
   minimapCtx.clearRect(0, 0, w, h);
 
-  // Radar grid rings
+  // Radar rings
   minimapCtx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
   minimapCtx.lineWidth = 1;
   minimapCtx.beginPath();
@@ -898,11 +821,18 @@ function renderRadar() {
   minimapCtx.arc(cx, cy, 60, 0, Math.PI * 2);
   minimapCtx.stroke();
 
-  // 4 Highway Lanes on radar
+  // Highway boundary
   minimapCtx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
   minimapCtx.strokeRect(cx - 26, 8, 52, h - 16);
 
-  // Traffic Blips (Red dots)
+  // Center line divider
+  minimapCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(cx, 8);
+  minimapCtx.lineTo(cx, h - 8);
+  minimapCtx.stroke();
+
+  // Traffic Blips (Yellow for oncoming on left, Red for forward on right)
   trafficCars.forEach(car => {
     const relZ = car.position.z - playerCarGroup.position.z;
     const relX = car.position.x;
@@ -910,14 +840,14 @@ function renderRadar() {
       const px = cx + (relX / CONFIG.ROAD_WIDTH) * 52;
       const py = cy + (relZ / 110) * 60;
 
-      minimapCtx.fillStyle = car.length > 6 ? '#ffaa00' : '#ff2a55';
+      minimapCtx.fillStyle = car.isOncoming ? '#fbbf24' : '#ff2a55';
       minimapCtx.beginPath();
       minimapCtx.arc(px, py, car.length > 6 ? 4.5 : 3.5, 0, Math.PI * 2);
       minimapCtx.fill();
     }
   });
 
-  // Player Blip (Cyan Arrow)
+  // Player Blip (Cyan)
   const playerPX = cx + (playerCarGroup.position.x / CONFIG.ROAD_WIDTH) * 52;
   minimapCtx.fillStyle = '#00f0ff';
   minimapCtx.beginPath();
@@ -929,7 +859,7 @@ function renderRadar() {
 }
 
 // ==========================================
-// 9. GAMEPLAY PHYSICS & CONTROLS LOOP
+// 9. GAMEPLAY PHYSICS & TWO-WAY SIMULATION
 // ==========================================
 let steerAngle = 0;
 let carRoll = 0;
@@ -950,7 +880,13 @@ function updatePhysics(delta) {
     STATE.speed = Math.max(0, STATE.speed - CONFIG.FRICTION * delta);
   }
 
-  // Nitro consumption & recharge
+  // Dynamic brake light glow on player car
+  const isBraking = KEYS.backward || STATE.speed < 5;
+  playerBrakeLights.forEach(light => {
+    light.material.color.setHex(isBraking ? 0xff0022 : 0xaa0015);
+  });
+
+  // Nitro
   if (KEYS.nitro && STATE.nitro > 0 && STATE.speed > 25) {
     STATE.isNitro = true;
     STATE.nitro = Math.max(0, STATE.nitro - 35 * delta);
@@ -970,17 +906,17 @@ function updatePhysics(delta) {
   if (KEYS.left) {
     steerAngle = Math.max(-CONFIG.MAX_STEER_ANGLE, steerAngle - CONFIG.STEER_SPEED * steerMult * delta);
     playerCarGroup.position.x -= (STATE.speed * 0.11 * steerMult + 4.5) * delta;
-    carRoll = THREE.MathUtils.lerp(carRoll, -0.08, 0.15);
+    carRoll = THREE.MathUtils.lerp(carRoll, -0.07, 0.15);
   } else if (KEYS.right) {
     steerAngle = Math.min(CONFIG.MAX_STEER_ANGLE, steerAngle + CONFIG.STEER_SPEED * steerMult * delta);
     playerCarGroup.position.x += (STATE.speed * 0.11 * steerMult + 4.5) * delta;
-    carRoll = THREE.MathUtils.lerp(carRoll, 0.08, 0.15);
+    carRoll = THREE.MathUtils.lerp(carRoll, 0.07, 0.15);
   } else {
     steerAngle = THREE.MathUtils.lerp(steerAngle, 0, 0.15);
     carRoll = THREE.MathUtils.lerp(carRoll, 0, 0.1);
   }
 
-  // Clamp bridge boundaries
+  // Clamp road boundary
   const boundary = CONFIG.ROAD_WIDTH / 2 - 1.2;
   if (playerCarGroup.position.x < -boundary) {
     playerCarGroup.position.x = -boundary;
@@ -990,7 +926,6 @@ function updatePhysics(delta) {
     STATE.speed *= 0.96;
   }
 
-  // Body tilts
   playerCarGroup.rotation.y = -steerAngle * 0.5;
   playerCarGroup.rotation.z = -carRoll;
 
@@ -1001,8 +936,8 @@ function updatePhysics(delta) {
     if (i < 2) w.rotation.y = -steerAngle;
   });
 
-  // Calculate Gears & RPM
-  const gearRatios = [0, 35, 70, 110, 150, 185, 225];
+  // Gears & RPM
+  const gearRatios = [0, 35, 70, 110, 150, 185, 220];
   for (let g = 1; g < gearRatios.length; g++) {
     if (STATE.speed <= gearRatios[g]) {
       STATE.gear = g;
@@ -1016,7 +951,12 @@ function updatePhysics(delta) {
   // Distance & Score
   const deltaDistance = (STATE.speed * 0.44704 * delta) / 1000;
   STATE.distance += deltaDistance;
-  STATE.score += Math.floor(STATE.speed * STATE.multiplier * delta * 5);
+
+  // Oncoming lane score multiplier bonus! (Driving in left lane is risky = 2x score)
+  const inOncomingLane = playerCarGroup.position.x < 0;
+  const laneBonus = inOncomingLane && STATE.speed > 60 ? 1.8 : 1.0;
+  STATE.score += Math.floor(STATE.speed * STATE.multiplier * laneBonus * delta * 5);
+
   if (STATE.speed > STATE.topSpeed) STATE.topSpeed = Math.floor(STATE.speed);
 
   // Speed lines
@@ -1025,7 +965,7 @@ function updatePhysics(delta) {
     speedLinesEl.style.opacity = STATE.speed > 120 ? (STATE.speed - 120) / 100 : 0;
   }
 
-  // 3. Infinite Road Scrolling
+  // 3. Move Highway Segments
   const roadScrollSpeed = (STATE.speed * 0.44704) * delta * 2.8;
   roadSegments.forEach(seg => {
     seg.position.z += roadScrollSpeed;
@@ -1034,17 +974,27 @@ function updatePhysics(delta) {
     }
   });
 
-  // 4. Update AI Traffic
+  // 4. Update Two-Way AI Traffic
   trafficCars.forEach(car => {
-    const relativeSpeed = (STATE.speed - car.speed) * 0.44704 * delta * 2.8;
-    car.position.z += relativeSpeed;
+    let relSpeed;
+    if (car.isOncoming) {
+      // Oncoming traffic comes TOWARDS player with combined speed!
+      relSpeed = (STATE.speed + car.speed) * 0.44704 * delta * 2.8;
+    } else {
+      // Forward traffic moves away
+      relSpeed = (STATE.speed - car.speed) * 0.44704 * delta * 2.8;
+    }
+    car.position.z += relSpeed;
 
-    // Traffic respawn ahead or behind
-    if (car.position.z > 30) {
-      car.position.z = -CONFIG.NUM_SEGMENTS * 28 - Math.random() * 40;
-      car.position.x = CONFIG.LANES[Math.floor(Math.random() * CONFIG.LANES.length)];
+    // Traffic respawn
+    if (car.position.z > 35) {
+      car.position.z = -CONFIG.NUM_SEGMENTS * 26 - Math.random() * 40;
+      // Respawn in valid lane according to direction
+      const availableLanes = car.isOncoming ? [0, 1] : [2, 3];
+      const newLane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
+      car.position.x = CONFIG.LANES[newLane];
       car.scoredNearMiss = false;
-    } else if (car.position.z < -CONFIG.NUM_SEGMENTS * 40) {
+    } else if (car.position.z < -CONFIG.NUM_SEGMENTS * 38) {
       car.position.z = 25;
     }
 
@@ -1052,26 +1002,37 @@ function updatePhysics(delta) {
     const dx = Math.abs(car.position.x - playerCarGroup.position.x);
     const dz = Math.abs(car.position.z - playerCarGroup.position.z);
 
-    if (dx < 1.9 && dz < (car.length / 2 + 1.8)) {
+    if (dx < 1.85 && dz < (car.length / 2 + 1.8)) {
       triggerCrash();
-    } else if (dx < 2.8 && dz < 3.2 && !car.scoredNearMiss && STATE.speed > 70) {
-      triggerNearMiss();
+    } else if (dx < 2.7 && dz < 3.0 && !car.scoredNearMiss && STATE.speed > 65) {
+      triggerNearMiss(car.isOncoming);
       car.scoredNearMiss = true;
     }
   });
 
-  // Update Audio Synthesizer
+  // Weather particles animation
+  if (weatherParticles) {
+    const pos = weatherParticles.geometry.attributes.position.array;
+    for (let i = 1; i < pos.length; i += 3) {
+      pos[i] -= 25 * delta;
+      pos[i + 1] += (STATE.speed * 0.4) * delta; // Rush towards windshield with speed
+      if (pos[i] < 0) pos[i] = 25;
+    }
+    weatherParticles.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Audio update
   Audio.update(STATE.speed, STATE.rpm, STATE.isDrifting, STATE.isNitro);
 
-  // Update HUD
-  updateHUD();
+  // HUD
+  updateHUD(inOncomingLane);
 }
 
-function updateHUD() {
+function updateHUD(inOncomingLane) {
   document.getElementById('speed-display').innerText = Math.floor(STATE.speed);
   document.getElementById('score-display').innerText = STATE.score.toLocaleString();
   document.getElementById('distance-display').innerText = STATE.distance.toFixed(1) + " KM";
-  document.getElementById('multiplier-display').innerText = STATE.multiplier.toFixed(1) + "x";
+  document.getElementById('multiplier-display').innerText = STATE.multiplier.toFixed(1) + "x" + (inOncomingLane ? " [ONCOMING 2X]" : "");
   document.getElementById('gear-display').innerHTML = `GEAR <span class="glow-cyan">${STATE.gear}</span>`;
 
   // Speedo gauge SVG Arc
@@ -1087,16 +1048,18 @@ function updateHUD() {
   document.getElementById('rpm-text').innerText = (STATE.rpm / 1000).toFixed(1);
 }
 
-function triggerNearMiss() {
+function triggerNearMiss(isOncoming) {
   STATE.nearMissCount++;
-  STATE.multiplier = Math.min(5.0, STATE.multiplier + 0.5);
-  STATE.score += 500 * STATE.multiplier;
+  const bonusMult = isOncoming ? 1.0 : 0.5;
+  STATE.multiplier = Math.min(6.0, STATE.multiplier + bonusMult);
+  const addScore = Math.floor(600 * STATE.multiplier * (isOncoming ? 1.5 : 1.0));
+  STATE.score += addScore;
 
   Audio.playNearMiss();
 
   const banner = document.getElementById('combo-banner');
   const text = document.getElementById('combo-text');
-  text.innerText = `NEAR MISS +${Math.floor(500 * STATE.multiplier)} (x${STATE.multiplier.toFixed(1)})`;
+  text.innerText = isOncoming ? `ONCOMING MISS +${addScore} (x${STATE.multiplier.toFixed(1)})` : `NEAR MISS +${addScore} (x${STATE.multiplier.toFixed(1)})`;
   banner.classList.add('active');
 
   clearTimeout(comboTimer);
@@ -1126,38 +1089,35 @@ function triggerCrash() {
 }
 
 // ==========================================
-// 10. DYNAMIC CAMERA SYSTEM (EXACT MATCH ANGLE)
+// 10. EXACT REAR CHASE CAMERA ANGLE
 // ==========================================
 function updateCamera() {
   if (STATE.photoMode) return;
 
   if (STATE.cameraMode === 0) {
-    // Screenshot Elevated Chase Angle: High overview looking ahead down the bridge
-    const targetCamX = playerCarGroup.position.x * 0.4;
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 0.08);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, 9.8 + (STATE.speed / CONFIG.MAX_SPEED) * 0.5, 0.08);
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, playerCarGroup.position.z + 13.5 + (STATE.speed / CONFIG.MAX_SPEED) * 1.2, 0.08);
-    camera.lookAt(playerCarGroup.position.x * 0.2, 1.0, playerCarGroup.position.z - 36);
+    // Exact match with screenshot: Tight low rear chase behind the black car
+    const targetCamX = playerCarGroup.position.x * 0.75;
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 0.12);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, 2.9 + (STATE.speed / CONFIG.MAX_SPEED) * 0.3, 0.1);
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, playerCarGroup.position.z + 6.2 + (STATE.speed / CONFIG.MAX_SPEED) * 0.9, 0.1);
+    camera.lookAt(playerCarGroup.position.x * 0.5, 1.2, playerCarGroup.position.z - 35);
 
-    camera.fov = THREE.MathUtils.lerp(camera.fov, 54 + (STATE.speed / CONFIG.MAX_SPEED) * 10, 0.08);
+    camera.fov = THREE.MathUtils.lerp(camera.fov, 56 + (STATE.speed / CONFIG.MAX_SPEED) * 12, 0.08);
     camera.updateProjectionMatrix();
   } else if (STATE.cameraMode === 1) {
-    // Close Chase Cam
-    const targetCamX = playerCarGroup.position.x * 0.7;
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 0.1);
-    camera.position.y = 3.6;
-    camera.position.z = playerCarGroup.position.z + 7.5;
-    camera.lookAt(playerCarGroup.position.x * 0.4, 1.2, playerCarGroup.position.z - 25);
-    camera.fov = 65;
+    // Elevated Bridge Cam
+    camera.position.set(playerCarGroup.position.x * 0.4, 8.5, playerCarGroup.position.z + 12);
+    camera.lookAt(playerCarGroup.position.x * 0.2, 1.0, playerCarGroup.position.z - 36);
+    camera.fov = 58;
     camera.updateProjectionMatrix();
   } else if (STATE.cameraMode === 2) {
-    // Cockpit Cam
+    // Hood / Cockpit
     camera.position.set(playerCarGroup.position.x, 1.05, playerCarGroup.position.z + 0.2);
     camera.lookAt(playerCarGroup.position.x, 1.05, playerCarGroup.position.z - 40);
     camera.fov = 75;
     camera.updateProjectionMatrix();
   } else {
-    // Bumper Cam
+    // Low Bumper
     camera.position.set(playerCarGroup.position.x, 0.4, playerCarGroup.position.z - 2.1);
     camera.lookAt(playerCarGroup.position.x, 0.4, playerCarGroup.position.z - 45);
     camera.fov = 85;
@@ -1166,7 +1126,7 @@ function updateCamera() {
 }
 
 // ==========================================
-// 11. EVENT LISTENERS & UI WIRING
+// 11. EVENT LISTENERS & UI
 // ==========================================
 function setupEventListeners() {
   window.addEventListener('keydown', (e) => {
@@ -1183,7 +1143,7 @@ function setupEventListeners() {
       STATE.cameraMode = (STATE.cameraMode + 1) % 4;
     }
     if (e.code === 'KeyT') {
-      const modes = ['daylight', 'sunset', 'midnight', 'rain'];
+      const modes = ['overcast', 'sunset', 'midnight', 'daylight'];
       const nextIdx = (modes.indexOf(STATE.envMode) + 1) % modes.length;
       setEnvironment(modes[nextIdx]);
     }
@@ -1207,18 +1167,15 @@ function setupEventListeners() {
     if (e.code === 'Space') KEYS.drift = false;
   });
 
-  // Start Button
   document.getElementById('start-btn').addEventListener('click', () => {
     Audio.init();
     startGame();
   });
 
-  // Retry Button
   document.getElementById('retry-btn').addEventListener('click', () => {
     startGame();
   });
 
-  // Main Menu Button
   document.getElementById('main-menu-btn').addEventListener('click', () => {
     document.getElementById('game-over-screen').classList.add('hidden');
     document.getElementById('main-menu').classList.remove('hidden');
@@ -1226,7 +1183,6 @@ function setupEventListeners() {
     STATE.playing = false;
   });
 
-  // Color Buttons
   document.querySelectorAll('.color-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
@@ -1239,7 +1195,6 @@ function setupEventListeners() {
     });
   });
 
-  // Environment Selector Buttons
   document.querySelectorAll('.env-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.env-btn').forEach(b => b.classList.remove('active'));
@@ -1248,7 +1203,6 @@ function setupEventListeners() {
     });
   });
 
-  // Wallpaper Modal
   const wpModal = document.getElementById('wallpaper-modal');
   document.getElementById('view-screenshot-btn').addEventListener('click', () => {
     wpModal.classList.remove('hidden');
@@ -1257,7 +1211,6 @@ function setupEventListeners() {
     wpModal.classList.add('hidden');
   });
 
-  // Photo Mode Controls
   document.getElementById('close-photo-btn').addEventListener('click', togglePhotoMode);
   document.getElementById('take-snapshot-btn').addEventListener('click', take4KSnapshot);
 }
@@ -1268,12 +1221,12 @@ function startGame() {
   STATE.crashed = false;
   STATE.score = 0;
   STATE.distance = 0;
-  STATE.speed = 45;
+  STATE.speed = 50;
   STATE.multiplier = 1.0;
   STATE.nearMissCount = 0;
   STATE.nitro = 100;
 
-  playerCarGroup.position.set(CONFIG.LANES[0], 0, 0);
+  playerCarGroup.position.set(CONFIG.LANES[2], 0, 0); // Start in right lane
   spawnTrafficFleet();
 
   document.getElementById('main-menu').classList.add('hidden');
@@ -1300,7 +1253,7 @@ function take4KSnapshot() {
   renderer.render(scene, camera);
   const dataURL = renderer.domElement.toDataURL('image/png');
   const link = document.createElement('a');
-  link.download = 'OVERDRIVE_Bridge_Screenshot.png';
+  link.download = 'OVERDRIVE_TwoWay_Screenshot.png';
   link.href = dataURL;
   link.click();
 }
@@ -1312,7 +1265,7 @@ function onWindowResize() {
 }
 
 // ==========================================
-// 12. MAIN ANIMATION LOOP
+// 12. ANIMATION LOOP
 // ==========================================
 let lastTime = performance.now();
 
@@ -1324,10 +1277,9 @@ function animate() {
   lastTime = now;
 
   if (STATE.menu) {
-    // Menu background smooth camera showcase
     const time = now * 0.0005;
-    camera.position.set(Math.sin(time) * 11, 7, Math.cos(time) * 11 + 6);
-    camera.lookAt(playerCarGroup.position.x, 1.2, 0);
+    camera.position.set(Math.sin(time) * 8, 3.2, Math.cos(time) * 8 + 4);
+    camera.lookAt(playerCarGroup.position.x, 0.9, 0);
   } else {
     updatePhysics(delta);
     updateCamera();
@@ -1337,7 +1289,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// Initialize on Load
+// Initialize
 window.addEventListener('DOMContentLoaded', () => {
   const savedHigh = localStorage.getItem('overdrive_high_score') || '0';
   document.getElementById('menu-high-score').innerText = parseInt(savedHigh).toLocaleString() + ' PTS';
