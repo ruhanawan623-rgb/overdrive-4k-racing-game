@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OVERDRIVE 4K // Ultra-Realistic Highway Racer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <!-- 3D Canvas Container -->
+  <div id="game-container"></div>
+
+  <!-- Speed Motion Blur Overlay -->
+  <div id="speed-lines"></div>
+  <div id="vignette"></div>
+  <div id="nitro-overlay"></div>
+
+  <!-- Game HUD Overlay -->
+  <div id="hud" class="hidden">
+    <!-- Top Bar: Scores, Time, Combos -->
+    <div class="hud-top">
+      <div class="hud-card score-card">
+        <span class="hud-label">SCORE</span>
+        <span id="score-display" class="hud-val">000,000</span>
+      </div>
+
+      <div class="hud-card multiplier-card">
+        <span class="hud-label">MULTIPLIER</span>
+        <span id="multiplier-display" class="hud-val glow-gold">1.0x</span>
+      </div>
+
+      <div class="hud-card distance-card">
+        <span class="hud-label">DISTANCE</span>
+        <span id="distance-display" class="hud-val">0.0 KM</span>
+      </div>
+
+      <div class="hud-card combo-banner" id="combo-banner">
+        <span id="combo-text">NEAR MISS +500</span>
+      </div>
+    </div>
+
+    <!-- Minimap Radar (Bottom Right) -->
+    <div class="minimap-container">
+      <canvas id="minimap-canvas" width="160" height="160"></canvas>
+      <div class="minimap-label">RADAR SCANNER</div>
+    </div>
+
+    <!-- Speedometer & Gauges (Bottom Left) -->
+    <div class="hud-bottom-left">
+      <div class="speedo-cluster">
+        <!-- SVG Gauge Dial -->
+        <svg class="speedo-dial-svg" viewBox="0 0 200 200">
+          <circle class="dial-bg" cx="100" cy="100" r="80"></circle>
+          <circle id="speedo-arc" class="dial-progress" cx="100" cy="100" r="80"></circle>
+        </svg>
+        <div class="speedo-content">
+          <div class="gear-display" id="gear-display">GEAR <span class="glow-cyan">4</span></div>
+          <div class="speed-number" id="speed-display">0</div>
+          <div class="speed-unit">MPH</div>
+        </div>
+      </div>
+
+      <!-- Nitro & RPM Bars -->
+      <div class="bars-container">
+        <div class="bar-group">
+          <div class="bar-label-row">
+            <span>NITRO (SHIFT)</span>
+            <span id="nitro-pct">100%</span>
+          </div>
+          <div class="bar-track">
+            <div id="nitro-bar-fill" class="bar-fill nitro-fill" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <div class="bar-group">
+          <div class="bar-label-row">
+            <span>RPM (x1000)</span>
+            <span id="rpm-text">1.2</span>
+          </div>
+          <div class="bar-track">
+            <div id="rpm-bar-fill" class="bar-fill rpm-fill" style="width: 20%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera & Sound Quick Indicators -->
+    <div class="hud-controls-hint">
+      <span>[W/↑] ACCEL</span>
+      <span>[S/↓] BRAKE</span>
+      <span>[A/D/←/→] STEER</span>
+      <span>[SPACE] DRIFT</span>
+      <span>[SHIFT] NITRO</span>
+      <span>[C] CAMERA</span>
+      <span>[T] TIME/WEATHER</span>
+      <span>[M] MUTE</span>
+      <span>[P] PHOTO MODE</span>
+    </div>
+  </div>
+
+  <!-- Start / Main Menu Screen -->
+  <div id="main-menu" class="screen-overlay">
+    <div class="menu-backdrop"></div>
+    <div class="menu-glass-panel">
+      <div class="logo-wrapper">
+        <div class="logo-badge">NEXT-GEN ENGINE 5</div>
+        <h1 class="game-title">OVERDRIVE <span class="title-accent">4K</span></h1>
+        <p class="game-subtitle">ULTRA-REALISTIC SUNSET HIGHWAY SIMULATION</p>
+      </div>
+
+      <div class="customizer-box">
+        <h3>VEHICLE COLOR</h3>
+        <div class="color-palette">
+          <button class="color-btn active" data-color="#0e3a6c" style="background: linear-gradient(135deg, #0e3a6c, #2b70c9);" title="Ocean Metallic"></button>
+          <button class="color-btn" data-color="#990b17" style="background: linear-gradient(135deg, #990b17, #ff2a3f);" title="Crimson Beast"></button>
+          <button class="color-btn" data-color="#0f8f5b" style="background: linear-gradient(135deg, #0f8f5b, #00ff88);" title="Neon Viper"></button>
+          <button class="color-btn" data-color="#c99700" style="background: linear-gradient(135deg, #c99700, #ffd700);" title="Golden Fury"></button>
+          <button class="color-btn" data-color="#141419" style="background: linear-gradient(135deg, #141419, #353545);" title="Stealth Carbon"></button>
+          <button class="color-btn" data-color="#7214a8" style="background: linear-gradient(135deg, #7214a8, #d44eff);" title="Cyber Violet"></button>
+        </div>
+
+        <div class="env-selector-box">
+          <h3>ATMOSPHERE</h3>
+          <div class="env-toggle-group">
+            <button class="env-btn active" data-env="sunset">SUNSET DUSK</button>
+            <button class="env-btn" data-env="midnight">CYBER NIGHT</button>
+            <button class="env-btn" data-env="rain">WET STORM</button>
+            <button class="env-btn" data-env="golden">SUNRISE</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-actions">
+        <button id="start-btn" class="btn-primary-glow">
+          <span class="btn-text">ENGAGE IGNITION</span>
+          <span class="btn-icon">⚡</span>
+        </button>
+        <button id="view-screenshot-btn" class="btn-secondary-glass">
+          <span>VIEW 4K WALLPAPER</span>
+        </button>
+      </div>
+
+      <div class="menu-footer">
+        <div class="high-score-tag">RECORD: <span id="menu-high-score">0 PTS</span></div>
+        <div class="audio-notice">🔊 Immersive Spatial Audio Engine Enabled</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="game-over-screen" class="screen-overlay hidden">
+    <div class="menu-backdrop blur-heavy"></div>
+    <div class="menu-glass-panel gameover-panel">
+      <div class="crash-badge">CRASH DETECTED</div>
+      <h2 class="gameover-title">MISSION TERMINATED</h2>
+
+      <div class="stat-summary-grid">
+        <div class="stat-box">
+          <span class="stat-label">FINAL SCORE</span>
+          <span class="stat-val glow-cyan" id="final-score">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">TOP SPEED</span>
+          <span class="stat-val glow-gold" id="final-top-speed">0 MPH</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">DISTANCE</span>
+          <span class="stat-val" id="final-distance">0.0 KM</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">NEAR MISSES</span>
+          <span class="stat-val glow-pink" id="final-near-misses">0</span>
+        </div>
+      </div>
+
+      <div class="gameover-actions">
+        <button id="retry-btn" class="btn-primary-glow">RESTART ENGINE</button>
+        <button id="main-menu-btn" class="btn-secondary-glass">GARAGE MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Photo Mode Modal / Viewport -->
+  <div id="photo-modal" class="screen-overlay hidden">
+    <div class="photo-hud">
+      <div class="photo-header">
+        <div class="photo-title">📷 PHOTO STUDIO [PAUSED]</div>
+        <div class="photo-controls">
+          <button id="filter-cinematic" class="photo-filter-btn active">Cinematic</button>
+          <button id="filter-vibrant" class="photo-filter-btn">Hyper HDR</button>
+          <button id="filter-noir" class="photo-filter-btn">Sunset Noir</button>
+          <button id="take-snapshot-btn" class="btn-snapshot">CAPTURE 4K SHOT</button>
+          <button id="close-photo-btn" class="btn-close-photo">RESUME [ESC]</button>
+        </div>
+      </div>
+      <div class="photo-watermark">OVERDRIVE 4K // RAY-TRACED GRAPHICS</div>
+    </div>
+  </div>
+
+  <!-- 4K Wallpaper Modal -->
+  <div id="wallpaper-modal" class="screen-overlay hidden">
+    <div class="wallpaper-view-wrapper">
+      <button id="close-wallpaper-btn" class="btn-close-wp">✕ CLOSE</button>
+      <img src="assets/wallpaper.jpg" alt="4K Ultra-Realistic Racing Game Wallpaper" class="wallpaper-img" id="wallpaper-img">
+      <div class="wallpaper-caption">
+        <h3>ULTRA-REALISTIC 4K RACING GAME SCREENSHOT</h3>
+        <p>Ray-traced reflections • Volumetric lighting • Dynamic motion blur • Photorealistic sports supercar</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
